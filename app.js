@@ -1,57 +1,56 @@
+import express from "express";
 import { Client, LocalAuth } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
-import express from "express";
+import OpenAI from "openai";
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-// WhatsApp Client setup
+// ✅ OpenAI Setup
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// ✅ WhatsApp Client Setup
 const client = new Client({
   authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process",
-      "--disable-gpu",
-    ],
-    executablePath:
-      process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium-browser",
-  },
 });
 
-// Show QR code in Railway logs
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
-  console.log("📱 Scan the QR code above to log in.");
+  console.log("Scan this QR to log in.");
 });
 
-// Ready
 client.on("ready", () => {
-  console.log("✅ WhatsApp Bot is ready and running on Railway!");
+  console.log("✅ WhatsApp Bot is ready!");
 });
 
-// Simple message listener
-client.on("message", async (msg) => {
-  console.log(`📩 Message from ${msg.from}: ${msg.body}`);
-  if (msg.body.toLowerCase() === "hi") {
-    await msg.reply("Hello! 🚀 Bot is live on Railway!");
+client.on("message", async (message) => {
+  console.log(`📩 Message from ${message.from}: ${message.body}`);
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // you can switch to "gpt-3.5-turbo"
+      messages: [{ role: "user", content: message.body }],
+    });
+
+    const reply = completion.choices[0].message.content;
+    await message.reply(reply);
+    console.log("🤖 Replied:", reply);
+  } catch (err) {
+    console.error("❌ OpenAI error:", err);
+    await message.reply("Sorry, I had an issue processing your request.");
   }
 });
 
-// Initialize
-client.initialize();
-
-// Express server (needed for Railway)
+// ✅ Express Server (Railway needs this)
 app.get("/", (req, res) => {
-  res.send("✅ WhatsApp bot running on Railway!");
+  res.send("🚀 WhatsApp AI Bot is running!");
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Server listening on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on http://localhost:${PORT}`);
 });
+
+// Start WhatsApp client
+client.initialize();
